@@ -14,5 +14,5 @@ Functions include:
 + reverse bits
 + convert string to upper and lower case
 + simple XOR cipher
-+ [Feistel ciper](https://en.wikipedia.org/wiki/Feistel_cipher)
++ [Feistel cipher](https://en.wikipedia.org/wiki/Feistel_cipher)
 + half adder, full adder, & ripple-carry adder
