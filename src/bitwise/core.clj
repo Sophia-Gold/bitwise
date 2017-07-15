@@ -32,13 +32,7 @@
   (+ 1
      (* (Integer/numberOfTrailingZeros (bit-shift-right x 1))
         (bit-shift-double 1233 12))))
-
-(defn xor-swap [a b]
-  (let [a (bit-xor a b)
-        b (bit-xor b a)
-        a (bit-xor a b)]
-    (list a b)))
-
+  
 (defn to-binary-seq [^long x]
   (map #(- (int %) (int \0))
        (Long/toBinaryString x)))
@@ -93,8 +87,75 @@
   (apply str
          (map (comp char #(bit-xor 0x20 %) byte int) a)))
 
+(defn partition-string [n string]
+  ;; add offset
+  (let [length (count string)]
+    (loop [i 0
+           result '()]
+      (if (= i n)
+        (reverse result)
+        (recur (inc i) (cons (subs string (* (/ length n) i) (* (/ length n) (inc i))) result))))))
+
+(defn hash-string [^String string]
+  (let [chars (map (comp long char) string)
+        len (count chars)]
+    (.longValue
+     (reduce +
+             (map #(* %1 (Math/pow 31 (- len %2)))
+                  chars
+                  (range len))))))
+  
+(defn murmur3 [^String string]
+  (let [chars (map (comp long char) string)
+        len (* (count chars) 2)]
+    (letfn [(mix1 [x]
+              (* 0x1b873593
+                 (Integer/rotateLeft (.intValue (* 0xcc9e2d51 (.intValue x))) 15)))
+            (mix2 [x y]
+              (+ 0xe6546b64
+                 (* 5
+                    (Integer/rotateLeft (.intValue (bit-xor x y)) 13))))
+            (avalanche [x]
+              (let [xor (bit-xor x len)
+                    right-16 (unsigned-bit-shift-right xor 16)
+                    xor-16 (.intValue (bit-xor xor right-16))
+                    hex-mul-1 (* xor-16 0x85ebca6b)
+                    hex-mul-2  (* (.intValue (bit-xor hex-mul-1
+                                                      (unsigned-bit-shift-right hex-mul-1 13)))
+                                  0xc2b2ae35)]
+                (bit-xor hex-mul-2
+                         (unsigned-bit-shift-right hex-mul-2 16))))]
+      (avalanche
+       (reduce #(bit-xor %2 (mix1 %1))
+               (map #(mix2 0
+                           (mix1 (bit-or %1
+                                         (bit-shift-left %2 16))))
+                    (take-nth 2 chars)
+                    (take-nth 2 (next chars))))))))
+
+(defn hash-symbol [sym]
+  (let [hash (hash-string (name sym))
+        sym-ns (namespace sym)
+        seed (hash-string (if (nil? sym-ns) (str *ns*) sym-ns))]
+    (bit-xor
+     seed
+     (+ hash
+        0x9e3779b9
+        (bit-shift-left seed 6)
+        (bit-shift-right seed 2)))))
+
+(defn xor-swap [a b]
+  (let [a (bit-xor a b)
+        b (bit-xor b a)
+        a (bit-xor a b)]
+    (list a b)))
+
 (defn random-key [length]
   (take length (repeatedly #(rand-int 2))))
+
+(defn key-gen [length]
+  ;; write function :)
+  )
 
 (defn xor-encrypt [msg key]
   (let [binary (map (comp to-binary-seq int) msg)]
@@ -107,14 +168,43 @@
          (map (comp char #(Long/parseLong % 2) #(apply str %))
               (map #(map bit-xor (flatten (take (count (first msg)) (repeat key))) %)
                    msg))))
+(defn s-box []
+  ;; https://en.wikipedia.org/wiki/S-box
+  )
 
-(defn partition-string [n string]
-  (let [length (count string)]
-    (loop [i 0
-           result '()]
-      (if (= i n)
-        (reverse result)
-        (recur (inc i) (cons (subs string (* (/ length n) i) (* (/ length n) (inc i))) result))))))
+(defn p-box []
+  ;; https://en.wikipedia.org/wiki/Permutation_box
+  )
+
+(defn lfsr [s {[x y z] :taps}]
+  (concat (drop 1 s)
+          [(bit-xor (nth s (- x 1))
+                   (nth s (- y 1))
+                   (nth s (- z 1)))]))
+
+(defn feistel [msg1 msg2 key]
+  (let [key-length (count key)
+        exp-msg1 (concat msg1 (take (- key-length (count msg1)) msg1))
+        exp-msg2 (concat msg2 (take (- key-length (count msg2)) msg2))
+        new-msg2 (p-box (s-box (xor-encrypt msg1 key)))]
+    [new-msg2 (xor-encrypt new-msg2 msg1) key]))
+    
+(defn permutations [msg key rounds & {:keys [offset] :or {offset 0}}]
+  ;; offset is float between 0-1
+  (let [msg-length (/ (count msg) 2)
+        key-length (/ (count key) 2)
+        msg1 (take (* msg-length offset) msg)
+        msg2 (drop (* msg-length (+ offset 1)) msg)
+        key1 (take key-length key)
+        key2 (drop key-length key)]
+    (loop [n 0
+           block1 msg1
+           block2 msg2
+           key key1
+           next-key key2]
+      (when (< n rounds)
+        (let [f (feistel msg1 msg2 key)]
+          (recur (inc n) (first f) (second f) (lfsr next-key) (peek f)))))))
 
 (defn feistel-encrypt [msg key blocks rounds]
   (letfn [(inner-loop [m k i cipher]
@@ -132,7 +222,7 @@
         (if (= i rounds)
           cipher
           (recur (outer-loop cipher 0 []) (inc i)))))))
-        
+
 (defn half-adder [a b]
   [(bit-xor a b)
    (bit-and a b)])
