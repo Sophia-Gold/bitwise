@@ -144,6 +144,42 @@
         (bit-shift-left seed 6)
         (bit-shift-right seed 2)))))
 
+(defn long-to-vec [^Long i]
+  (loop [i i
+         seq '()]
+    (if (zero? i)
+      (vec seq)
+      (recur (long (/ i 10))
+             (conj seq (mod i 10))))))
+
+(defn bloom-conj [bitvec ^String string]
+  (loop [count 0
+         hash (dedupe (sort
+                       (long-to-vec (murmur3 string))))
+         bitvec bitvec]
+    (if (empty? hash)
+      bitvec
+      (if (= count (first hash))
+        (recur (inc count) (next hash) (conj bitvec 1))
+        (recur (inc count) hash (conj bitvec 0))))))
+        
+(defn bloom-contains? [^String string bitvec]
+  (loop [count 0
+         hash (dedupe (sort
+                       (long-to-vec (murmur3 string))))
+         bitvec bitvec]
+    (cond
+      (and (= (first bitvec) 1)
+           (not= (first hash) count)) false
+      (and (= (first bitvec) 1)
+           (= (first hash) count)) (recur (inc count)
+                                          (next hash)
+                                          (next bitvec))
+      (= (first bitvec) 0) (recur (inc count)
+                                  hash
+                                  (next bitvec))
+      (empty? hash) true)))
+
 (defn xor-swap [a b]
   (let [a (bit-xor a b)
         b (bit-xor b a)
