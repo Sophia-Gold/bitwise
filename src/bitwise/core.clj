@@ -145,12 +145,7 @@
         (bit-shift-right seed 2)))))
 
 (defn long-to-vec [^Long i]
-  (loop [i i
-         seq '()]
-    (if (zero? i)
-      (vec seq)
-      (recur (long (/ i 10))
-             (conj seq (mod i 10))))))
+  (mapv (comp #(- % 48) long) (str i)))
 
 (defn bloom-conj [bitvec ^String string]
   (loop [count 0
