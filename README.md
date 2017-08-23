@@ -16,7 +16,9 @@ Functions include:
 + [java.lang.String hashCode()](https://en.wikipedia.org/wiki/Java_hashCode())
 + [MurmurHash3](https://en.wikipedia.org/wiki/MurmurHash)
 + Hash combine
++ [Rolling hash](https://en.wikipedia.org/wiki/Rolling_hash)
 + [Bloom filter](https://en.wikipedia.org/wiki/Bloom_filter)
++ [Rabin–Karp string searching](https://en.wikipedia.org/wiki/Rabin%E2%80%93Karp_algorithm)
 + [XOR swap](https://en.wikipedia.org/wiki/XOR_swap_algorithm)
 + [XOR cipher](https://en.wikipedia.org/wiki/XOR_cipher)
 + [Linear-feedback shift register](https://en.wikipedia.org/wiki/Linear-feedback_shift_register)

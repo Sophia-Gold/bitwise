@@ -1,5 +1,11 @@
 (ns bitwise.core)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;                                                                                   ;;
+;; NUMERICS                                                                          ;;
+;;                                                                                   ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (defn gcd [a b]
   (cond
     (zero? a) b
@@ -37,6 +43,9 @@
   (map #(- (int %) (int \0))
        (Long/toBinaryString x)))
 
+(defn long-to-vec [^Long i]
+  (mapv (comp #(- % 48) long) (str i)))
+
 (defn bit-count [x]
   (loop [i 0
          v x]
@@ -50,51 +59,11 @@
    (apply str (reverse (to-binary-seq x)))
    2))
 
-;; (defn bitwise-reverse [x]
-;;   (with-local-vars [i x]
-;;     (var-set i (bit-or
-;;                 (bit-shift-right (bit-and x 0xaaaaaaaa) 1)
-;;                 (bit-shift-left (bit-and x 0x55555555) 1)))
-;;     (var-set i (bit-or
-;;                 (bit-shift-right (bit-and x 0xcccccccc) 2)
-;;                 (bit-shift-left (bit-and x 0x33333333) 2)))
-;;     (var-set i (bit-or
-;;                 (bit-shift-right (bit-and x 0xf0f0f0f0) 4)
-;;                 (bit-shift-left (bit-and x 0x0f0f0f0f) 4)))
-;;     (var-set i (bit-or
-;;                 (bit-shift-right (bit-and x 0xff00ff00) 8)
-;;                 (bit-shift-left (bit-and x 0x00ff00ff) 8)))
-;;     (var-set i (bit-or
-;;                 (bit-shift-right (bit-and x 0xffff0000) 16)
-;;                 (bit-shift-left (bit-and x 0x0000ffff) 16)))
-;;     @i))
-
-;; (defn quicksort [lst]
-;;   (let [t-lst (transient (into [] lst))]
-;;     (loop [pivot 0]
-;;       (when-not (empty? (nthnext t-lst (inc pivot)))
-;;         (if (> (nth t-lst pivot) (nth t-lst (inc pivot)))
-;;           (xor-swap (nth t-lst pivot) (nth t-lst (inc pivot))))
-;;         (recur (inc pivot))))
-;;     (persistent! t-lst)))
-
-(defn to-lower [^String a]
-  (apply str
-         (map
-          (comp char #(bit-xor % 0x20) byte int) a)))
-
-(defn to-upper [^String a]
-  (apply str
-         (map (comp char #(bit-xor 0x20 %) byte int) a)))
-
-(defn partition-string [n string]
-  ;; add offset
-  (let [length (count string)]
-    (loop [i 0
-           result '()]
-      (if (= i n)
-        (reverse result)
-        (recur (inc i) (cons (subs string (* (/ length n) i) (* (/ length n) (inc i))) result))))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;                                                                                   ;;
+;; NON-CRYPTOGRAPHIC HASH FUNCTIONS                                                  ;;
+;;                                                                                   ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn hash-string [^String string]
   (let [chars (map (comp long char) string)
@@ -144,36 +113,135 @@
         (bit-shift-left seed 6)
         (bit-shift-right seed 2)))))
 
-(defn long-to-vec [^Long i]
-  (mapv (comp #(- % 48) long) (str i)))
+(defn rolling-hash [base s]
+  (->> s
+       (reverse)
+       (map-indexed #(* (Math/pow base %1) %2))
+       (reduce + 0)
+       (#(rem % 9223372036854775807))
+       (long)))
 
-(defn bloom-conj [bitvec ^String string]
-  (loop [count 0
-         hash (dedupe (sort
-                       (long-to-vec (murmur3 string))))
-         bitvec bitvec]
-    (if (empty? hash)
-      bitvec
-      (if (= count (first hash))
-        (recur (inc count) (next hash) (conj bitvec 1))
-        (recur (inc count) hash (conj bitvec 0))))))
-        
-(defn bloom-contains? [^String string bitvec]
-  (loop [count 0
-         hash (dedupe (sort
-                       (long-to-vec (murmur3 string))))
-         bitvec bitvec]
-    (cond
-      (and (= (first bitvec) 1)
-           (not= (first hash) count)) false
-      (and (= (first bitvec) 1)
-           (= (first hash) count)) (recur (inc count)
-                                          (next hash)
-                                          (next bitvec))
-      (= (first bitvec) 0) (recur (inc count)
-                                  hash
-                                  (next bitvec))
-      (empty? hash) true)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;                                                                                   ;;
+;; STRINGOLOGY                                                                       ;;
+;;                                                                                   ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn to-lower [^String a]
+  (apply str
+         (map
+          (comp char #(bit-xor % 0x20) byte int) a)))
+
+(defn to-upper [^String a]
+  (apply str
+         (map (comp char #(bit-xor 0x20 %) byte int) a)))
+
+(defn partition-string [n string]
+  ;; add offset
+  (let [length (count string)]
+    (loop [i 0
+           result '()]
+      (if (= i n)
+        (reverse result)
+        (recur (inc i) (cons (subs string (* (/ length n) i) (* (/ length n) (inc i))) result))))))
+
+(defn bloom-conj [base chunk-size string]
+  (let [sparse (->> string
+                    (rolling-hash base)
+                    (str)
+                    (map (comp #(- % 48) long))
+                    (#(partition chunk-size %))
+                    (map (comp long
+                               #(reduce + %)
+                               (fn [coll] (map-indexed #(* (Math/pow 10 %1) %2) coll))))
+                    (sort)
+                    (dedupe))]
+    (->> (map - (next sparse) sparse)
+         (cons (inc (first sparse)))
+         (mapcat #(concat (repeat (dec %) 0) [1])))))
+    
+(defn bloom-contains? [base chunk-size bitvec hash]
+  (let [hash (->> hash
+                   (str)
+                   (map (comp #(- % 48) long))
+                   (#(partition chunk-size %))
+                   (map (comp long
+                              #(reduce + %)
+                              (fn [coll] (map-indexed #(* (Math/pow 10 %1) %2) coll))))
+                   (sort)
+                   (dedupe))]
+    (if (< (count bitvec) (apply max hash))
+      false
+      (loop [hash hash]
+        (cond
+          (empty? hash) true
+          (zero? (nth bitvec (first hash))) false
+          :else (recur (next hash)))))))
+      
+(defprotocol Rabin-Karp
+  (rabin-karp [s p]))
+
+(extend-protocol Rabin-Karp
+  String
+  (rabin-karp
+    [^String p ^String s]
+    (let [base 128
+          p (map long p)
+          p-length (count p)
+          p-hash (rolling-hash base p)
+          s (map long s)
+          end (- (count s) p-length)
+          roll (long (Math/pow base (dec p-length)))]
+      (loop [s s
+             s-hash (rolling-hash base (take p-length s))
+            count 0]
+        (let [test (take p-length s)]
+          (cond 
+            (and (= p-hash s-hash) (= p test)) count
+            (= count end) false
+            :else (recur (drop 1 s)
+                         (+ (* base
+                               (- s-hash
+                                  (* (first s) roll)))
+                            (nth s p-length))
+                         (inc count)))))))
+  clojure.lang.Seqable
+  (rabin-karp
+    [p ^String s]
+    (let [base 128
+          chunk-size 2
+          p (map #(map long %) p)
+          p-length (count (first p))
+          bitvec (apply map bit-or (map #(bloom-conj base chunk-size %) p))
+          s (map long s)
+          end (- (count s) p-length)
+          roll (long (Math/pow base (dec p-length)))]
+      (loop [s s
+             s-hash (rolling-hash base (take p-length s))
+             count 0]
+        (let [test (take p-length s)]
+          (cond
+            (bloom-contains? base
+                             chunk-size
+                             bitvec
+                             s-hash) (let [matches (keep-indexed #(if (true? %2) %1)
+                                                                 (map #(= test %) p))]
+                                       (if (not (empty? matches))
+                                         (list (clojure.string/join (map char (nth p (first matches))))
+                                               count)))
+            (= count end) false
+            :else (recur (drop 1 s)
+                         (+ (* base
+                               (- s-hash
+                                  (* (first s) roll)))
+                            (nth s p-length))
+                         (inc count))))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;                                                                                   ;;
+;; CYPHERS                                                                           ;;
+;;                                                                                   ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn xor-swap [a b]
   (let [a (bit-xor a b)
@@ -183,10 +251,6 @@
 
 (defn random-key [length]
   (take length (repeatedly #(rand-int 2))))
-
-(defn key-gen [length]
-  ;; write function :)
-  )
 
 (defn xor-encrypt [msg key]
   (let [binary (map (comp to-binary-seq int) msg)]
@@ -253,6 +317,12 @@
         (if (= i rounds)
           cipher
           (recur (outer-loop cipher 0 []) (inc i)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;                                                                                   ;;
+;; ADDERS                                                                            ;;
+;;                                                                                   ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn half-adder [a b]
   [(bit-xor a b)
