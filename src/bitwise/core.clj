@@ -1,6 +1,9 @@
 (ns bitwise.core
   (:require [clojure.test :refer :all]))
 
+;; (set! *warn-on-reflection* true)
+;; (set! *unchecked-math* :warn-on-boxed)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; NUMERICS
@@ -18,7 +21,9 @@
                                       (unsigned-bit-shift-right b 1)))
     (and (even? a) (odd? b)) (recur (unsigned-bit-shift-right a 1) b)
     (and (odd? a) (even? b)) (recur a (unsigned-bit-shift-right b 1))
-    (and (odd? a) (odd? b)) (recur (unsigned-bit-shift-right (Math/abs (- a b)) 1) (min a b))))
+    (and (odd? a) (odd? b)) (recur (unsigned-bit-shift-right
+                                    (Math/abs (long (- a b))) ;; coerce to avoid reflection
+                                    1) (min a b))))
 
 (defn bit-shift-double [^double x shifts]
   (let [x-long (Double/doubleToRawLongBits x)]
@@ -69,7 +74,7 @@
 (defn hash-string [^String string]
   (let [chars (map (comp long char) string)
         len (count chars)]
-    (.longValue
+    (long
      (reduce +
              (map #(* %1 (Math/pow 31 (- len %2)))
                   chars
@@ -80,18 +85,18 @@
         len (* (count chars) 2)]
     (letfn [(mix1 [x]
               (* 0x1b873593
-                 (Integer/rotateLeft (.intValue (* 0xcc9e2d51 (.intValue x))) 15)))
+                 (Integer/rotateLeft (* 0xcc9e2d51 x) 15)))
             (mix2 [x y]
               (+ 0xe6546b64
                  (* 5
-                    (Integer/rotateLeft (.intValue (bit-xor x y)) 13))))
+                    (Integer/rotateLeft (bit-xor x y) 13))))
             (avalanche [x]
               (let [xor (bit-xor x len)
                     right-16 (unsigned-bit-shift-right xor 16)
-                    xor-16 (.intValue (bit-xor xor right-16))
+                    xor-16 (bit-xor xor right-16)
                     hex-mul-1 (* xor-16 0x85ebca6b)
-                    hex-mul-2  (* (.intValue (bit-xor hex-mul-1
-                                                      (unsigned-bit-shift-right hex-mul-1 13)))
+                    hex-mul-2  (* (bit-xor hex-mul-1
+                                           (unsigned-bit-shift-right hex-mul-1 13))
                                   0xc2b2ae35)]
                 (bit-xor hex-mul-2
                          (unsigned-bit-shift-right hex-mul-2 16))))]
@@ -317,7 +322,7 @@
              cipher (inner-loop msg-blocks key-blocks 0 [])]
         (if (= i rounds)
           cipher
-          (recur (outer-loop cipher 0 []) (inc i)))))))
+          (recur (inc i) (outer-loop cipher 0 [])))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;                               
@@ -340,10 +345,11 @@
          b (reverse b)
          sum '()
          carry 0]
-    (let [added (full-adder (first a) (first b) carry)]
+    (let [bit-sum (first (full-adder (first a) (first b) carry))
+          bit-carry (long (second (full-adder (first a) (first b) carry)))]
       (if (and (empty? (next a)) (empty? (next b)))
-        (conj sum (first added) (bit-or carry 1))
-        (recur (next a) (next b) (conj sum (first added)) (second added))))))
+        (conj sum bit-sum (bit-or carry 1))
+        (recur (next a) (next b) (conj sum bit-sum) bit-carry)))))
 
 (deftest adder
   (is (= (Long/parseLong (apply str (ripple-carry-adder (to-binary-seq 10) (to-binary-seq 10))) 2)
