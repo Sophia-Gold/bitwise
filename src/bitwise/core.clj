@@ -1,6 +1,9 @@
 (ns bitwise.core
-  (:require [clojure.test :refer :all]))
+  (:require [clojure.test :refer :all]
+            [clojure.core :as cc]
+            [primitive-math]))
 
+(primitive-math/use-primitive-operators)
 ;; (set! *warn-on-reflection* true)
 ;; (set! *unchecked-math* :warn-on-boxed)
 
@@ -10,49 +13,49 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn gcd [a b]
+(defn gcd [^long a ^long b]
   (cond
     (zero? a) b
     (zero? b) a
-    (neg? a) (- a)
-    (neg? b) (- b)
+    (> 0 a) (- a)
+    (> 0 b) (- b)
     (and (even? a) (even? b)) (* 2
-                                 (gcd (unsigned-bit-shift-right a 1)
-                                      (unsigned-bit-shift-right b 1)))
+                                 (long (gcd (unsigned-bit-shift-right a 1)
+                                            (unsigned-bit-shift-right b 1))))
     (and (even? a) (odd? b)) (recur (unsigned-bit-shift-right a 1) b)
     (and (odd? a) (even? b)) (recur a (unsigned-bit-shift-right b 1))
     (and (odd? a) (odd? b)) (recur (unsigned-bit-shift-right
                                     (Math/abs (long (- a b))) ;; coerce to avoid reflection
                                     1) (min a b))))
 
-(defn bit-shift-double [^double x shifts]
+(defn bit-shift-double [^double x ^long shifts]
   (let [x-long (Double/doubleToRawLongBits x)]
     (Double/longBitsToDouble
      (bit-or (bit-and 1 x-long)
              (bit-shift-left (- (bit-shift-right x-long 52) shifts) 52)
              (bit-and 0xfffffffffffff x-long)))))
 
-(defn inverse-sqrt [x]
-  (let [y (Float/intBitsToFloat
+(defn inverse-sqrt [^double x]
+  (let [y (Double/longBitsToDouble
            (- 0x5f3759df
-              (bit-shift-right (Float/floatToRawIntBits x) 1)))]
+              (bit-shift-right (Double/longBitsToDouble x) 1)))]
     (* y
        (- 1.5
           (* 0.5 x y y)))))
 
-(defn log10 [x]
-  (+ 1
-     (* (Integer/numberOfTrailingZeros (bit-shift-right x 1))
-        (bit-shift-double 1233 12))))
+(defn log10 [^long x]
+  (+ 1.0
+     (* (double (Integer/numberOfTrailingZeros (bit-shift-right x 1)))
+        (double (bit-shift-double 1233 12)))))
   
-(defn to-binary-seq [^long x]
-  (map #(- (int %) (int \0))
-       (Long/toBinaryString x)))
+(defn to-binary-seq [x]
+  (map #(- (cc/long %) (cc/long \0))
+       (Integer/toBinaryString x)))
 
-(defn long-to-vec [^Long i]
-  (mapv (comp #(- % 48) long) (str i)))
+(defn long-to-vec [^long i]
+  (mapv #(- (long %) 48) (str i)))
 
-(defn bit-count [x]
+(defn bit-count [^long x]
   (loop [i 0
          v x]
     (if (= v 0)
@@ -72,18 +75,17 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn hash-string [^String string]
-  (let [chars (map (comp long char) string)
-        len (count chars)]
-    (long
-     (reduce +
-             (map #(* %1 (Math/pow 31 (- len %2)))
-                  chars
-                  (range len))))))
+  (let [chars (map (comp cc/long char) string)
+        len (count string)]
+    (reduce +'
+            (map #(* (long (Math/pow 31 (- len (long %2)))))
+                 chars
+                 (range len)))))
   
 (defn murmur3 [^String string]
   (let [chars (map (comp long char) string)
         len (* (count chars) 2)]
-    (letfn [(mix1 [x]
+    (letfn [(mix1 [^long x]
               (* 0x1b873593
                  (Integer/rotateLeft (* 0xcc9e2d51 x) 15)))
             (mix2 [x y]
@@ -109,21 +111,20 @@
                     (take-nth 2 (next chars))))))))
 
 (defn hash-symbol [sym]
-  (let [hash (hash-string (name sym))
+  (let [hash (long (hash-string (name sym)))
         sym-ns (namespace sym)
         seed (hash-string (if (nil? sym-ns) (str *ns*) sym-ns))]
-    (bit-xor
-     seed
-     (+ hash
-        0x9e3779b9
-        (bit-shift-left seed 6)
-        (bit-shift-right seed 2)))))
+    (bit-xor seed
+             (+ hash
+                0x9e3779b9
+                (bit-shift-left seed 6)
+                (bit-shift-right seed 2)))))
 
 (defn rolling-hash [base s]
   (->> s
        (reverse)
-       (map-indexed #(* (Math/pow base %1) %2))
-       (reduce + 0)
+       (map-indexed #(* (long (Math/pow base %1)) (long %2)))
+       (reduce +' 0)
        (#(rem % 9223372036854775807))
        (long)))
 
@@ -142,9 +143,9 @@
   (apply str
          (map (comp char #(bit-xor 0x20 %) byte int) a)))
 
-(defn partition-string [n string]
+(defn partition-string [^long n string]
   ;; add offset
-  (let [length (count string)]
+  (let [length (long (count string))]
     (loop [i 0
            result '()]
       (if (= i n)
@@ -155,33 +156,33 @@
   (let [sparse (->> string
                     (rolling-hash base)
                     (str)
-                    (map (comp #(- % 48) long))
+                    (map #(- (long %) 48))
                     (#(partition chunk-size %))
                     (map (comp long
-                               #(reduce + %)
-                               (fn [coll] (map-indexed #(* (Math/pow 10 %1) %2) coll))))
+                               #(reduce +' %)
+                               (fn [coll] (map-indexed #(* (long (Math/pow 10 %1)) (long %2)) coll))))
                     (sort)
                     (dedupe))]
-    (->> (map - (next sparse) sparse)
-         (cons (inc (first sparse)))
-         (mapcat #(concat (repeat (dec %) 0) [1])))))
+    (->> (map -' (next sparse) sparse)
+         (cons (inc (long (first sparse))))
+         (mapcat #(concat (repeat (dec (long %)) 0) [1])))))
     
 (defn bloom-contains? [base chunk-size bitvec hash]
   (let [hash (->> hash
                    (str)
-                   (map (comp #(- % 48) long))
+                   (map #(- (long %) 48))
                    (#(partition chunk-size %))
                    (map (comp long
-                              #(reduce + %)
-                              (fn [coll] (map-indexed #(* (Math/pow 10 %1) %2) coll))))
+                              #(reduce +' %)
+                              (fn [coll] (map-indexed #(* (long (Math/pow 10 %1)) (long %2)) coll))))
                    (sort)
                    (dedupe))]
-    (if (< (count bitvec) (apply max hash))
+    (if (< (count bitvec) (long (apply cc/max hash)))
       false
       (loop [hash hash]
         (cond
           (empty? hash) true
-          (zero? (nth bitvec (first hash))) false
+          (zero? (long (nth bitvec (first hash)))) false
           :else (recur (next hash)))))))
       
 (defprotocol Rabin-Karp
@@ -200,16 +201,16 @@
           roll (long (Math/pow base (dec p-length)))]
       (loop [s s
              s-hash (rolling-hash base (take p-length s))
-            count 0]
+             count 0]
         (let [test (take p-length s)]
           (cond 
             (and (= p-hash s-hash) (= p test)) count
             (= count end) false
             :else (recur (drop 1 s)
                          (+ (* base
-                               (- s-hash
-                                  (* (first s) roll)))
-                            (nth s p-length))
+                               (- (long s-hash)
+                                  (* (long (first s)) roll)))
+                            (long (nth s p-length)))
                          (inc count)))))))
   clojure.lang.Seqable
   (rabin-karp
@@ -218,7 +219,7 @@
           chunk-size 2
           p (map #(map long %) p)
           p-length (count (first p))
-          bitvec (apply map bit-or (map #(bloom-conj base chunk-size %) p))
+          bitvec (apply map cc/bit-or (map #(bloom-conj base chunk-size %) p))
           s (map long s)
           end (- (count s) p-length)
           roll (long (Math/pow base (dec p-length)))]
@@ -238,9 +239,9 @@
             (= count end) false
             :else (recur (drop 1 s)
                          (+ (* base
-                               (- s-hash
-                                  (* (first s) roll)))
-                            (nth s p-length))
+                               (- (long s-hash)
+                                  (* (long (first s)) roll)))
+                            (long (nth s p-length)))
                          (inc count))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -260,21 +261,27 @@
 
 (defn xor-encrypt [msg key]
   (let [binary (map (comp to-binary-seq int) msg)]
-    (map #(map bit-xor %
+    (map #(map cc/bit-xor %
                (flatten (take (count (first binary)) (repeat key))))
          binary)))
 
 (defn xor-decrypt [msg key]
   (apply str
          (map (comp char #(Long/parseLong % 2) #(apply str %))
-              (map #(map bit-xor (flatten (take (count (first msg)) (repeat key))) %)
+              (map #(map cc/bit-xor (flatten (take (count (first msg)) (repeat key))) %)
                    msg))))
 
-(defn lfsr [s {[x y z] :taps}]
+(defn lfsr [s {[^long x ^long y ^long z] :taps}]
   (concat (drop 1 s)
-          [(bit-xor (nth s (- x 1))
-                   (nth s (- y 1))
-                   (nth s (- z 1)))]))
+          [(bit-xor (nth (- x 1))
+                    (nth s (- y 1))
+                    (nth s (- z 1)))]))
+
+(defn p-box []
+  )
+
+(defn s-box []
+  )
 
 (defn feistel [msg1 msg2 key]
   (let [key-length (count key)
@@ -283,7 +290,7 @@
         new-msg2 (p-box (s-box (xor-encrypt msg1 key)))]
     [new-msg2 (xor-encrypt new-msg2 msg1) key]))
     
-(defn permutations [msg key rounds & {:keys [offset] :or {offset 0}}]
+(defn permutations [msg key ^long rounds {:keys [^long offset] :or {offset 0}}]
   ;; offset is float between 0-1
   (let [msg-length (/ (count msg) 2)
         key-length (/ (count key) 2)
@@ -300,12 +307,12 @@
         (let [f (feistel msg1 msg2 key)]
           (recur (inc n) (first f) (second f) (lfsr next-key) (peek f)))))))
 
-(defn feistel-encrypt [msg key blocks rounds]
-  (letfn [(inner-loop [m k i cipher]
+(defn feistel-encrypt [msg key ^long blocks ^long rounds]
+  (letfn [(inner-loop [m k ^long i cipher]
             (if (= i blocks)
               cipher
               (recur (next m) (next k) (inc i) (conj cipher (xor-encrypt (first m) (first k))))))
-          (outer-loop [m i cipher]
+          (outer-loop [m ^long i cipher]
             (if (> i (/ blocks 2))
               cipher
               (recur (pop (next m)) (inc i) (conj cipher (inner-loop (first m) (peek m) 0 [])))))]
