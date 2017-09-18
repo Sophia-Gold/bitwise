@@ -269,13 +269,6 @@
          (map (comp char #(Long/parseLong % 2) #(apply str %))
               (map #(map bit-xor (flatten (take (count (first msg)) (repeat key))) %)
                    msg))))
-(defn s-box []
-  ;; https://en.wikipedia.org/wiki/S-box
-  )
-
-(defn p-box []
-  ;; https://en.wikipedia.org/wiki/Permutation_box
-  )
 
 (defn lfsr [s {[x y z] :taps}]
   (concat (drop 1 s)
@@ -360,6 +353,44 @@
          (+ 32 38)))
   (is (= (Long/parseLong (apply str (ripple-carry-adder (to-binary-seq 130) (to-binary-seq 250))) 2)
          (+ 130 250))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; LOGIC GATES
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn toffoli [a b c]
+  (list a
+        b
+        (bit-xor (bit-and a b) c)))
+
+(defn fredkin [a b c]
+  (let [s (bit-and (bit-xor b c) a)]
+    (list a
+          (bit-xor b s)
+          (bit-xor c s))))
+
+(deftest toffoli-table
+  (is (= (toffoli 0 0 0) '(0 0 0)))
+  (is (= (toffoli 0 0 1) '(0 0 1)))
+  (is (= (toffoli 0 1 0) '(0 1 0)))
+  (is (= (toffoli 0 1 1) '(0 1 1)))
+  (is (= (toffoli 1 0 0) '(1 0 0)))
+  (is (= (toffoli 1 0 1) '(1 0 1)))
+  (is (= (toffoli 1 1 0) '(1 1 1)))
+  (is (= (toffoli 1 1 1) '(1 1 0))))
+
+(deftest fredkin-table
+  (is (= (fredkin 0 0 0) '(0 0 0)))
+  (is (= (fredkin 0 0 1) '(0 0 1)))
+  (is (= (fredkin 0 1 0) '(0 1 0)))
+  (is (= (fredkin 0 1 1) '(0 1 1)))
+  (is (= (fredkin 1 0 0) '(1 0 0)))
+  (is (= (fredkin 1 0 1) '(1 1 0)))
+  (is (= (fredkin 1 1 0) '(1 0 1)))
+  (is (= (fredkin 1 1 1) '(1 1 1))))
 
 (defn -main []
   )

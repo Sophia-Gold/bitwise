@@ -24,3 +24,9 @@ Functions include:
 + [Linear-feedback shift register](https://en.wikipedia.org/wiki/Linear-feedback_shift_register)
 + [Feistel cipher](https://en.wikipedia.org/wiki/Feistel_cipher)
 + [Half adder, full adder, & ripple-carry adder](https://en.wikipedia.org/wiki/Adder_(electronics))
++ [Toffoli gate](https://en.wikipedia.org/wiki/Toffoli_gate)
++ [Fredkin gate](https://en.wikipedia.org/wiki/Fredkin_gate)
+
+---
+
+_To do: S-box, P-box, Shor's algorithm, Grover's algorithm_
