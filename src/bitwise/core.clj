@@ -37,11 +37,20 @@
 
 (defn inverse-sqrt [^double x]
   (let [y (Double/longBitsToDouble
-           (- 0x5f3759df
-              (bit-shift-right (Double/longBitsToDouble x) 1)))]
+           (- 0x5FE6EB50C7B537A9  ;; magic constant for doubles (https://cs.uwaterloo.ca/~m32rober/rsqrt.pdf)
+              (bit-shift-right (Double/doubleToRawLongBits x) 1)))]
     (* y
        (- 1.5
           (* 0.5 x y y)))))
+
+(deftest i-sq
+  ;; precision varies from Java Math past two decimals
+  (is (= (/ (double (Math/floor (* 100.0 (inverse-sqrt 0.15625)))) 100.0)
+         (/ (double (Math/floor (* 100.0 (/ 1.0 (Math/sqrt 0.15625))))) 100.0)))
+  (is (= (/ (double (Math/floor (* 100.0 (inverse-sqrt 2.0)))) 100.0)
+         (/ (double (Math/floor (* 100.0 (/ 1.0 (Math/sqrt 2.0))))) 100.0)))
+  (is (= (/ (double (Math/floor (* 100.0 (inverse-sqrt (Math/E))))) 100.0)
+         (/ (double (Math/floor (* 100.0 (/ 1.0 (Math/sqrt (Math/E)))))) 100.0))))
 
 (defn log10 [^long x]
   (+ 1.0
