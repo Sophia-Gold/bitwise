@@ -1,6 +1,7 @@
 (ns bitwise.core
   (:require [clojure.core :as cc]
-            [primitive-math]))
+            [primitive-math]
+            [criterium.core :refer [quick-bench bench]]))
 
 (primitive-math/use-primitive-operators)
 ;; (set! *warn-on-reflection* true)
@@ -12,7 +13,7 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn gcd [^long a ^long b]
+(defn gcd ^long [^long a ^long b]
   (cond
     (zero? a) b
     (zero? b) a
@@ -24,17 +25,17 @@
     (and (even? a) (odd? b)) (recur (unsigned-bit-shift-right a 1) b)
     (and (odd? a) (even? b)) (recur a (unsigned-bit-shift-right b 1))
     (and (odd? a) (odd? b)) (recur (unsigned-bit-shift-right
-                                    (Math/abs (long (- a b))) ;; coerce to avoid reflection
+                                    (Math/abs (- a b))
                                     1) (min a b))))
 
-(defn bit-shift-double [^double x ^long shifts]
+(defn bit-shift-double ^double [^double x ^long shifts]
   (let [x-long (Double/doubleToRawLongBits x)]
     (Double/longBitsToDouble
      (bit-or (bit-and 1 x-long)
              (bit-shift-left (- (bit-shift-right x-long 52) shifts) 52)
              (bit-and 0xfffffffffffff x-long)))))
 
-(defn inverse-sqrt [^double x]
+(defn inverse-sqrt ^double [^double x]
   (let [y (Double/longBitsToDouble
            (- 0x5FE6EB50C7B537A9  ;; magic constant for doubles (https://cs.uwaterloo.ca/~m32rober/rsqrt.pdf)
               (bit-shift-right (Double/doubleToRawLongBits x) 1)))]
@@ -42,11 +43,14 @@
        (- 1.5
           (* 0.5 x y y)))))
 
-(defn log10 [^long x]
+(defn log10 ^double [x]
   (+ 1.0
      (* (double (Integer/numberOfTrailingZeros (bit-shift-right x 1)))
-        (double (bit-shift-double 1233 12)))))
-  
+        (bit-shift-double 1233 12))))
+
+(defn str-to-longs [^String s]
+  (map #(Character/codePointAt s (long %)) (range (count s))))
+
 (defn to-binary-seq [x]
   (map #(- (cc/long %) (cc/long \0))
        (Integer/toBinaryString x)))
@@ -54,7 +58,7 @@
 (defn long-to-vec [^long i]
   (mapv #(- (long %) 48) (str i)))
 
-(defn bit-count [^long x]
+(defn bit-count ^long [^long x]
   (loop [i 0
          v x]
     (if (= v 0)
@@ -62,10 +66,9 @@
       (recur (inc i)
              (bit-and v (- v 1))))))
 
-(defn reverse-bits [x]
-  (Long/parseLong
-   (apply str (reverse (to-binary-seq x)))
-   2))
+(defn reverse-bits ^long [x]
+  (Long/parseLong (apply str (reverse (to-binary-seq x)))
+                  2))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -73,8 +76,8 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn hash-string [^String string]
-  (let [chars (map (comp cc/long char) string)
+(defn hash-string ^long [^String string]
+  (let [chars (map cc/long string)
         len (count string)]
     (reduce +'
             (map #(* (long (Math/pow 31 (- len (long %2)))))
@@ -109,8 +112,8 @@
                     (take-nth 2 chars)
                     (take-nth 2 (next chars))))))))
 
-(defn hash-symbol [sym]
-  (let [hash (long (hash-string (name sym)))
+(defn hash-symbol ^long [sym]
+  (let [hash (hash-string (name sym))
         sym-ns (namespace sym)
         seed (hash-string (if (nil? sym-ns) (str *ns*) sym-ns))]
     (bit-xor seed
@@ -119,13 +122,13 @@
                 (bit-shift-left seed 6)
                 (bit-shift-right seed 2)))))
 
-(defn rolling-hash [base s]
+(defn rolling-hash ^long [^long base ^String s]
   (->> s
-       (reverse)
+       (clojure.string/reverse)
+       (str-to-longs)
        (map-indexed #(* (long (Math/pow base %1)) (long %2)))
-       (reduce +' 0)
-       (#(rem % 9223372036854775807))
-       (long)))
+       (reduce +')
+       (#(rem % 9223372036854775807))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -133,25 +136,25 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn to-lower [^String a]
+(defn to-lower ^String [^String a]
   (apply str
          (map
           (comp char #(bit-xor % 0x20) byte int) a)))
 
-(defn to-upper [^String a]
+(defn to-upper ^String [^String a]
   (apply str
          (map (comp char #(bit-xor 0x20 %) byte int) a)))
 
-(defn partition-string [^long n string]
+(defn partition-string [^long n ^String string]
   ;; add offset
-  (let [length (long (count string))]
+  (let [length (count string)]
     (loop [i 0
            result '()]
       (if (= i n)
         (reverse result)
         (recur (inc i) (cons (subs string (* (/ length n) i) (* (/ length n) (inc i))) result))))))
 
-(defn bloom-conj [base chunk-size string]
+(defn bloom-conj [^long base ^long chunk-size ^String string]
   (let [sparse (->> string
                     (rolling-hash base)
                     (str)
@@ -166,7 +169,7 @@
          (cons (inc (long (first sparse))))
          (mapcat #(concat (repeat (dec (long %)) 0) [1])))))
     
-(defn bloom-contains? [base chunk-size bitvec hash]
+(defn bloom-contains? [^long base ^long chunk-size bitvec ^long hash]
   (let [hash (->> hash
                    (str)
                    (map #(- (long %) 48))
@@ -207,7 +210,7 @@
             (= count end) false
             :else (recur (drop 1 s)
                          (+ (* base
-                               (- (long s-hash)
+                               (- s-hash
                                   (* (long (first s)) roll)))
                             (long (nth s p-length)))
                          (inc count)))))))
@@ -238,7 +241,7 @@
             (= count end) false
             :else (recur (drop 1 s)
                          (+ (* base
-                               (- (long s-hash)
+                               (- s-hash
                                   (* (long (first s)) roll)))
                             (long (nth s p-length)))
                          (inc count))))))))
@@ -255,16 +258,16 @@
         a (bit-xor a b)]
     (list a b)))
 
-(defn random-key [length]
+(defn random-key ^long [^long length]
   (take length (repeatedly #(rand-int 2))))
 
-(defn xor-encrypt [msg key]
+(defn xor-encrypt [^String msg key]
   (let [binary (map (comp to-binary-seq int) msg)]
     (map #(map cc/bit-xor %
                (flatten (take (count (first binary)) (repeat key))))
          binary)))
 
-(defn xor-decrypt [msg key]
+(defn xor-decrypt ^String [^String msg key]
   (apply str
          (map (comp char #(Long/parseLong % 2) #(apply str %))
               (map #(map cc/bit-xor (flatten (take (count (first msg)) (repeat key))) %)
@@ -282,14 +285,14 @@
 (defn s-box []
   )
 
-(defn feistel [msg1 msg2 key]
+(defn feistel [^String msg1 ^String msg2 key]
   (let [key-length (count key)
         exp-msg1 (concat msg1 (take (- key-length (count msg1)) msg1))
         exp-msg2 (concat msg2 (take (- key-length (count msg2)) msg2))
         new-msg2 (p-box (s-box (xor-encrypt msg1 key)))]
     [new-msg2 (xor-encrypt new-msg2 msg1) key]))
     
-(defn permutations [msg key ^long rounds {:keys [^long offset] :or {offset 0}}]
+(defn permutations [^String msg key ^long rounds {:keys [^long offset] :or {offset 0}}]
   ;; offset is float between 0-1
   (let [msg-length (/ (count msg) 2)
         key-length (/ (count key) 2)
@@ -306,12 +309,12 @@
         (let [f (feistel msg1 msg2 key)]
           (recur (inc n) (first f) (second f) (lfsr next-key) (peek f)))))))
 
-(defn feistel-encrypt [msg key ^long blocks ^long rounds]
-  (letfn [(inner-loop [m k ^long i cipher]
+(defn feistel-encrypt [^String msg key ^long blocks ^long rounds]
+  (letfn [(inner-loop [m k ^long ^long i cipher]
             (if (= i blocks)
               cipher
               (recur (next m) (next k) (inc i) (conj cipher (xor-encrypt (first m) (first k))))))
-          (outer-loop [m ^long i cipher]
+          (outer-loop [m ^long ^long i cipher]
             (if (> i (/ blocks 2))
               cipher
               (recur (pop (next m)) (inc i) (conj cipher (inner-loop (first m) (peek m) 0 [])))))]

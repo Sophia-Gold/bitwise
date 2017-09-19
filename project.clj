@@ -1,4 +1,4 @@
-(defproject bitwise "0.2.1"
+(defproject bitwise "0.2.2"
   :description "a collection of bit twiddling functions for Clojure"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
