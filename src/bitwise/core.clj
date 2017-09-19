@@ -1,7 +1,6 @@
 (ns bitwise.core
   (:require [clojure.core :as cc]
-            [primitive-math]
-            [criterium.core :refer [quick-bench bench]]))
+            [primitive-math]))
 
 (primitive-math/use-primitive-operators)
 ;; (set! *warn-on-reflection* true)
