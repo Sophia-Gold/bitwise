@@ -1,4 +1,4 @@
-# bitwise
+# bitwise [![Build Status](https://travis-ci.org/Sophia-Gold/bitwise.svg?branch=master)](https://travis-ci.org/Sophia-Gold/bitwise)
 I found myself writing some bit twiddling functions for projects I was working on and wasn't able to find anything similar in Clojure so decided to put together a library. Most of these (and many more) can be found in the book [Hacker's Delight](http://www.hackersdelight.org/) as well as [this collection](http://graphics.stanford.edu/~seander/bithacks.html) from Stanford. This is very much a work in process and I hope to keep refining and adding to it as I have the time.
 
 
