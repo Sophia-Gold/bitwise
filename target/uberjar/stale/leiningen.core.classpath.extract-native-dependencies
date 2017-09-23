@@ -1,0 +1,1 @@
+[{:dependencies {org.clojure/clojure {:vsn "1.8.0", :native-prefix nil}, primitive-math {:vsn "0.1.6", :native-prefix nil}}, :native-path "target/uberjar/native"} {:native-path "target/uberjar/native", :dependencies {org.clojure/clojure {:vsn "1.8.0", :native-prefix nil, :native? false}, primitive-math {:vsn "0.1.6", :native-prefix nil, :native? false}}}]
