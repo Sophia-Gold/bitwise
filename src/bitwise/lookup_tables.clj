@@ -1,3 +1,10 @@
+;;  Lookup Tables from D. S. Wise and R. Raman,
+;;  "Converting to and from Dilated Integers,"
+;;  in IEEE Transactions on Computers,
+;;  vol. 57, no. , pp. 567-573, 2007
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (ns bitwise.lookup-tables)
 
 (def dilate-tab2
