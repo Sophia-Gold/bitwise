@@ -3,8 +3,8 @@
             [primitive-math]))
 
 (primitive-math/use-primitive-operators)
-;; (set! *warn-on-reflection* true)
-;; (set! *unchecked-math* :warn-on-boxed)
+(set! *warn-on-reflection* true)
+(set! *unchecked-math* :warn-on-boxed)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -57,17 +57,77 @@
 (defn long-to-vec [^long i]
   (mapv #(- (long %) 48) (str i)))
 
+;; Brian Kernighan's algorithm
 (defn bit-count ^long [^long x]
   (loop [i 0
-         v x]
-    (if (= v 0)
+         x x]
+    (if (= x 0)
       i
       (recur (inc i)
-             (bit-and v (- v 1))))))
+             (bit-and x (dec x))))))
+
+(defn bit-count2 ^long [^long x]
+  (let [table (byte-array
+               [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
+                1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+                1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+                2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+                1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+                2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+                2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+                3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+                1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
+                2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+                2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+                3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+                2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
+                3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+                3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
+                4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8])]
+    (loop [i 0
+           x x]
+      (if (= x 0)
+        i
+        (recur (+ i (long (nth table (bit-and x 0xFF))))
+               (unsigned-bit-shift-right x 8))))))
+
+(defn bit-count3 ^long [^long x]
+  (let [mask5 (bit-xor -1 (bit-shift-left -1 32))
+        mask4 (bit-xor mask5 (bit-shift-left mask5 16))
+        mask3 (bit-xor mask4 (bit-shift-left mask4 8))
+        mask2 (bit-xor mask3 (bit-shift-left mask3 4))
+        mask1 (bit-xor mask2 (bit-shift-left mask2 2))
+        mask0 (bit-xor mask1 (bit-shift-left mask1 1))
+        x0 (+ (bit-and mask0 x)
+              (bit-and mask0 (unsigned-bit-shift-right x 1)))
+        x1 (+ (bit-and mask1 x0)
+              (bit-and mask1 (unsigned-bit-shift-right x0 2)))
+        x2 (bit-and mask2 (+ x1
+                             (unsigned-bit-shift-right x1 4)))
+        x3 (bit-and mask3 (+ x2
+                             (unsigned-bit-shift-right x2 8)))
+        x4 (bit-and mask4 (+ x3
+                             (unsigned-bit-shift-right x3 16)))
+        x5 (bit-and mask5 (+ x4
+                             (unsigned-bit-shift-right x4 32)))]
+    x5))
 
 (defn reverse-bits ^long [x]
   (Long/parseLong (apply str (reverse (to-binary-seq x)))
                   2))
+
+(defn round-pow2 ^long [^long x]
+  (let [x0 (dec x)
+        x1 (bit-or x0 (unsigned-bit-shift-right x0 1))
+        x2 (bit-or x1 (unsigned-bit-shift-right x1 2))
+        x3 (bit-or x2 (unsigned-bit-shift-right x2 4))
+        x4 (bit-or x3 (unsigned-bit-shift-right x3 8))
+        x5 (bit-or x4 (unsigned-bit-shift-right x4 16))
+        x6 (bit-or x5 (unsigned-bit-shift-right x5 32))]
+    (inc x6)))
+
+(defn least-bit ^long [^long x]
+  (bit-and x (- x)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

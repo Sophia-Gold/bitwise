@@ -7,9 +7,13 @@ Functions include:
 + [Binary GCD (Stein's Algorithm)](https://en.wikipedia.org/wiki/Binary_GCD_algorithm)
 + Bit-shift right for double-precision floats
 + [Fast inverse square root](https://en.wikipedia.org/wiki/Fast_inverse_square_root)
++ Round to closest power of two
 + Log10 of integers
 + Convert long to binary sequence
++ Least significant bit
 + [Counting bit sets (Brian Kernighan's algorithm)](http://www.geeksforgeeks.org/count-set-bits-in-an-integer/)
++ Counting bit sets (table lookup)
++ Counting bit sets (parallel divide and conquer)
 + Reverse bits
 + Partition string
 + Convert string to upper and lower case
