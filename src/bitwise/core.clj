@@ -1,5 +1,5 @@
 (ns bitwise.core
-  (:require [bitwise.dilate]
+  (:require [bitwise.dilate :refer :all]
             [clojure.core :as cc]
             [primitive-math]))
 
