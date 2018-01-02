@@ -30,6 +30,7 @@ Functions include:
 + [Half adder, full adder, & ripple-carry adder](https://en.wikipedia.org/wiki/Adder_(electronics))
 + [Toffoli gate](https://en.wikipedia.org/wiki/Toffoli_gate)
 + [Fredkin gate](https://en.wikipedia.org/wiki/Fredkin_gate)
++ [Dilated integers](https://en.wikipedia.org/wiki/Dilation_(morphology))
 
 ---
 
