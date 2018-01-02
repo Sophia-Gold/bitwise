@@ -1,5 +1,6 @@
 (ns bitwise.core
-  (:require [clojure.core :as cc]
+  (:require [bitwise.dilate :refer :all]
+            [clojure.core :as cc]
             [primitive-math]))
 
 (primitive-math/use-primitive-operators)
@@ -8,7 +9,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; NUMERICS
+;; Numerics
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
