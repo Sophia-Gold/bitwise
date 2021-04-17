@@ -335,7 +335,7 @@
 
 (defn lfsr [s {[^long x ^long y ^long z] :taps}]
   (concat (drop 1 s)
-          [(bit-xor (nth (- x 1))
+          [(bit-xor (nth s (- x 1))
                     (nth s (- y 1))
                     (nth s (- z 1)))]))
 
